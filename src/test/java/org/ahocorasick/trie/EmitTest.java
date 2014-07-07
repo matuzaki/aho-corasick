@@ -1,23 +1,23 @@
 package org.ahocorasick.trie;
 
-import org.junit.Test;
-
 import static junit.framework.Assert.assertEquals;
 import static junit.framework.Assert.assertNotSame;
+
+import org.junit.Test;
 
 public class EmitTest {
 
     @Test
     public void equals() {
-        Emit one = new Emit(13, 42, null);
-        Emit two = new Emit(13, 42, null);
+        Emit<Integer> one = new Emit<Integer>(13, 42, null, 0);
+        Emit<Integer> two = new Emit<Integer>(13, 42, null, 0);
         assertEquals(one, two);
     }
 
     @Test
     public void notEquals() {
-        Emit one = new Emit(13, 42, null);
-        Emit two = new Emit(13, 43, null);
+        Emit<Integer> one = new Emit<Integer>(13, 42, null, 0);
+        Emit<Integer> two = new Emit<Integer>(13, 43, null, 0);
         assertNotSame(one, two);
     }
 

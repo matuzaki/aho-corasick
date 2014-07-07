@@ -1,24 +1,34 @@
 package org.ahocorasick.trie;
 
-import org.ahocorasick.interval.Interval;
-import org.ahocorasick.interval.Intervalable;
+import java.io.Serializable;
 
-public class Emit extends Interval implements Intervalable {
+import org.ahocorasick.interval.Interval;
+
+@SuppressWarnings("serial")
+public class Emit<T> extends Interval implements Serializable {
 
     private final String keyword;
+    private final T payload;
 
-    public Emit(final int start, final int end, final String keyword) {
+    public Emit(final int start, final int end, final String keyword,
+            final T payload) {
         super(start, end);
         this.keyword = keyword;
+        this.payload = payload;
     }
 
     public String getKeyword() {
         return this.keyword;
     }
 
+    public T getPayload() {
+        return this.payload;
+    }
+
     @Override
     public String toString() {
-        return super.toString() + "=" + this.keyword;
+        return super.toString() + "=" + this.keyword + "\n"
+                + payload.toString();
     }
 
 }

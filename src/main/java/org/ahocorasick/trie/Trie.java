@@ -1,69 +1,74 @@
 package org.ahocorasick.trie;
 
-import org.ahocorasick.interval.IntervalTree;
-import org.ahocorasick.interval.Intervalable;
-
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.LinkedBlockingDeque;
 
+import org.ahocorasick.interval.IntervalTree;
+import org.ahocorasick.interval.Intervalable;
+import org.ahocorasick.trie.State.StringPayload;
+
 /**
  *
- * Based on the Aho-Corasick white paper, Bell technologies: ftp://163.13.200.222/assistant/bearhero/prog/%A8%E4%A5%A6/ac_bm.pdf
+ * Based on the Aho-Corasick white paper, Bell technologies:
+ * ftp://163.13.200.222/assistant/bearhero/prog/%A8%E4%A5%A6/ac_bm.pdf
+ * 
  * @author Robert Bor
  */
-public class Trie {
+@SuppressWarnings("serial")
+public class Trie<T> implements Serializable {
 
     private TrieConfig trieConfig;
 
-    private State rootState;
+    private State<T> rootState;
 
     private boolean failureStatesConstructed = false;
 
     public Trie(TrieConfig trieConfig) {
         this.trieConfig = trieConfig;
-        this.rootState = new State();
+        this.rootState = new State<T>();
     }
 
     public Trie() {
         this(new TrieConfig());
     }
 
-    public Trie caseInsensitive() {
+    public Trie<T> caseInsensitive() {
         this.trieConfig.setCaseInsensitive(true);
         return this;
     }
 
-    public Trie removeOverlaps() {
+    public Trie<T> removeOverlaps() {
         this.trieConfig.setAllowOverlaps(false);
         return this;
     }
 
-    public Trie onlyWholeWords() {
+    public Trie<T> onlyWholeWords() {
         this.trieConfig.setOnlyWholeWords(true);
         return this;
     }
 
-    public void addKeyword(String keyword) {
+    public void addKeyword(String keyword, T payload) {
         if (keyword == null || keyword.length() == 0) {
             return;
         }
-        State currentState = this.rootState;
+        State<T> currentState = this.rootState;
         for (Character character : keyword.toCharArray()) {
             currentState = currentState.addState(character);
         }
-        currentState.addEmit(keyword);
+        currentState.addEmit(keyword, payload);
     }
 
     public Collection<Token> tokenize(String text) {
 
         Collection<Token> tokens = new ArrayList<Token>();
 
-        Collection<Emit> collectedEmits = parseText(text);
+        Collection<Emit<T>> collectedEmits = parseText(text);
         int lastCollectedPosition = -1;
-        for (Emit emit : collectedEmits) {
+        for (Emit<T> emit : collectedEmits) {
             if (emit.getStart() - lastCollectedPosition > 1) {
                 tokens.add(createFragment(emit, text, lastCollectedPosition));
             }
@@ -77,16 +82,19 @@ public class Trie {
         return tokens;
     }
 
-    private Token createFragment(Emit emit, String text, int lastCollectedPosition) {
-        return new FragmentToken(text.substring(lastCollectedPosition+1, emit == null ? text.length() : emit.getStart()));
+    private Token createFragment(Emit<T> emit, String text,
+            int lastCollectedPosition) {
+        return new FragmentToken(text.substring(lastCollectedPosition + 1,
+                emit == null ? text.length() : emit.getStart()));
     }
 
-    private Token createMatch(Emit emit, String text) {
-        return new MatchToken(text.substring(emit.getStart(), emit.getEnd()+1), emit);
+    private Token createMatch(Emit<T> emit, String text) {
+        return new MatchToken(
+                text.substring(emit.getStart(), emit.getEnd() + 1), emit);
     }
 
     @SuppressWarnings("unchecked")
-    public Collection<Emit> parseText(String text) {
+    public Collection<Emit<T>> parseText(String text) {
         checkForConstructedFailureStates();
 
         if (trieConfig.isCaseInsensitive()) {
@@ -94,8 +102,8 @@ public class Trie {
         }
 
         int position = 0;
-        State currentState = this.rootState;
-        List<Emit> collectedEmits = new ArrayList<Emit>();
+        State<T> currentState = this.rootState;
+        List<Emit<T>> collectedEmits = new ArrayList<Emit<T>>();
         for (Character character : text.toCharArray()) {
             currentState = getState(currentState, character);
             storeEmits(position, currentState, collectedEmits);
@@ -107,33 +115,36 @@ public class Trie {
         }
 
         if (!trieConfig.isAllowOverlaps()) {
-            IntervalTree intervalTree = new IntervalTree((List<Intervalable>)(List<?>)collectedEmits);
-            intervalTree.removeOverlaps((List<Intervalable>) (List<?>) collectedEmits);
+            IntervalTree intervalTree = new IntervalTree(
+                    (List<Intervalable>) (List<?>) collectedEmits);
+            intervalTree
+                    .removeOverlaps((List<Intervalable>) (List<?>) collectedEmits);
         }
 
         return collectedEmits;
     }
 
-    private void removePartialMatches(String searchText, List<Emit> collectedEmits) {
+    private void removePartialMatches(String searchText,
+            List<Emit<T>> collectedEmits) {
         long size = searchText.length();
-        List<Emit> removeEmits = new ArrayList<Emit>();
-        for (Emit emit : collectedEmits) {
-            if ((emit.getStart() == 0 ||
-                 !Character.isAlphabetic(searchText.charAt(emit.getStart() - 1))) &&
-                (emit.getEnd() + 1 == size ||
-                 !Character.isAlphabetic(searchText.charAt(emit.getEnd() + 1)))) {
+        List<Emit<T>> removeEmits = new ArrayList<Emit<T>>();
+        for (Emit<T> emit : collectedEmits) {
+            if ((emit.getStart() == 0 || !Character.isAlphabetic(searchText
+                    .charAt(emit.getStart() - 1)))
+                    && (emit.getEnd() + 1 == size || !Character
+                            .isAlphabetic(searchText.charAt(emit.getEnd() + 1)))) {
                 continue;
             }
             removeEmits.add(emit);
         }
 
-        for (Emit removeEmit : removeEmits) {
+        for (Emit<T> removeEmit : removeEmits) {
             collectedEmits.remove(removeEmit);
         }
     }
 
-    private State getState(State currentState, Character character) {
-        State newCurrentState = currentState.nextState(character);
+    private State<T> getState(State<T> currentState, Character character) {
+        State<T> newCurrentState = currentState.nextState(character);
         while (newCurrentState == null) {
             currentState = currentState.failure();
             newCurrentState = currentState.nextState(character);
@@ -148,10 +159,10 @@ public class Trie {
     }
 
     private void constructFailureStates() {
-        Queue<State> queue = new LinkedBlockingDeque<State>();
+        Queue<State<T>> queue = new LinkedBlockingDeque<State<T>>();
 
         // First, set the fail state of all depth 1 states to the root state
-        for (State depthOneState : this.rootState.getStates()) {
+        for (State<T> depthOneState : this.rootState.getStates()) {
             depthOneState.setFailure(this.rootState);
             queue.add(depthOneState);
         }
@@ -159,28 +170,31 @@ public class Trie {
 
         // Second, determine the fail state for all depth > 1 state
         while (!queue.isEmpty()) {
-            State currentState = queue.remove();
+            State<T> currentState = queue.remove();
 
             for (Character transition : currentState.getTransitions()) {
-                State targetState = currentState.nextState(transition);
+                State<T> targetState = currentState.nextState(transition);
                 queue.add(targetState);
 
-                State traceFailureState = currentState.failure();
+                State<T> traceFailureState = currentState.failure();
                 while (traceFailureState.nextState(transition) == null) {
                     traceFailureState = traceFailureState.failure();
                 }
-                State newFailureState = traceFailureState.nextState(transition);
+                State<T> newFailureState = traceFailureState
+                        .nextState(transition);
                 targetState.setFailure(newFailureState);
-                targetState.addEmit(newFailureState.emit());
+                targetState.addEmit(newFailureState.emits());
             }
         }
     }
 
-    private void storeEmits(int position, State currentState, List<Emit> collectedEmits) {
-        Collection<String> emits = currentState.emit();
+    private void storeEmits(int position, State<T> currentState,
+            List<Emit<T>> collectedEmits) {
+        Collection<StringPayload<T>> emits = currentState.emits();
         if (emits != null && !emits.isEmpty()) {
-            for (String emit : emits) {
-                collectedEmits.add(new Emit(position-emit.length()+1, position, emit));
+            for (StringPayload<T> emit : emits) {
+                collectedEmits.add(new Emit<T>(position - emit.keyword.length()
+                        + 1, position, emit.keyword, emit.payload));
             }
         }
     }
